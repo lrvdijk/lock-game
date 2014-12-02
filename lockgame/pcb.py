@@ -5,7 +5,7 @@ from gi.repository import Gtk, Gdk, Rsvg
 import kdtree
 import cairo
 
-HIGHLIGHT_RADIUS = 5.0
+HIGHLIGHT_RADIUS = 7.5
 
 class Pin:
     """
@@ -41,6 +41,7 @@ class PCBWidget(Gtk.DrawingArea):
         self.points_to_highlight = []
 
         self.pins = kdtree.create(dimensions=2)
+        self.highlighted_pins = []
 
         self.connect('draw', self.on_draw)
         self.connect('configure-event', self.on_configure)
@@ -66,7 +67,6 @@ class PCBWidget(Gtk.DrawingArea):
             # instead of the top left corner.
             # The line below fixes the y coordinate.
             pin.y = self.svg_handle.props.height - pin.y
-            print(pin.y)
             self.pins.add(pin)
 
         self.pins.rebalance()
@@ -90,7 +90,7 @@ class PCBWidget(Gtk.DrawingArea):
         return scale * x, scale * y
 
     def highlight_pin(self, pin):
-        ctx = cairo.Context(self.surface)
+        ctx = cairo.Context(self.highlight_surface)
 
         # Convert x and y to window coordinates
         scaled_x, scaled_y = self.to_window_coordinates(pin.x, pin.y)
@@ -102,8 +102,28 @@ class PCBWidget(Gtk.DrawingArea):
         rect = Gdk.Rectangle()
         rect.x = scaled_x - HIGHLIGHT_RADIUS
         rect.y = scaled_y - HIGHLIGHT_RADIUS
-        rect.width = HIGHLIGHT_RADIUS * 4
-        rect.height = HIGHLIGHT_RADIUS * 4
+        rect.width = HIGHLIGHT_RADIUS * 2
+        rect.height = HIGHLIGHT_RADIUS * 2
+
+        self.get_window().invalidate_rect(rect, False)
+        self.highlighted_pins.append(pin)
+
+    def unhighlight_pin(self, pin):
+        ctx = cairo.Context(self.highlight_surface)
+
+        # Convert x and y to window coordinates
+        scaled_x, scaled_y = self.to_window_coordinates(pin.x, pin.y)
+
+        ctx.arc(scaled_x, scaled_y, HIGHLIGHT_RADIUS+0.5, 0, 2*math.pi)
+        ctx.set_operator(cairo.OPERATOR_CLEAR)
+        ctx.set_source_rgba(1, 1, 1, 1)
+        ctx.fill()
+
+        rect = Gdk.Rectangle()
+        rect.x = scaled_x - HIGHLIGHT_RADIUS
+        rect.y = scaled_y - HIGHLIGHT_RADIUS
+        rect.width = HIGHLIGHT_RADIUS * 2
+        rect.height = HIGHLIGHT_RADIUS * 2
 
         self.get_window().invalidate_rect(rect, False)
 
@@ -118,6 +138,8 @@ class PCBWidget(Gtk.DrawingArea):
         """
 
         allocation = self.get_allocation()
+
+        # Create a surface where we will draw our PCB SVG
         self.surface = self.get_window().create_similar_surface(cairo.CONTENT_COLOR,
             allocation.width, allocation.height)
 
@@ -133,6 +155,17 @@ class PCBWidget(Gtk.DrawingArea):
         ctx.paint()
         self.svg_handle.render_cairo(ctx)
 
+        # Create a separate surface for highlighting areas
+        self.highlight_surface = self.get_window().create_similar_surface(
+            cairo.CONTENT_COLOR_ALPHA, allocation.width, allocation.height)
+
+        highlight_ctx = cairo.Context(self.highlight_surface)
+
+        # Make sure it is completely transparent
+        highlight_ctx.set_source_rgba(1, 1, 1, 0)
+        highlight_ctx.set_operator(cairo.OPERATOR_SOURCE)
+        highlight_ctx.paint()
+
         return True
 
     def on_motion_notify(self, widget, event):
@@ -147,12 +180,13 @@ class PCBWidget(Gtk.DrawingArea):
             dist = math.sqrt((nearest_pin.x - scaled_x)**2 +
                 (nearest_pin.y - scaled_y)**2)
 
-            print(dist)
-
             if dist <= 10:
-                self.highlight_pin(nearest_pin)
+                if nearest_pin not in self.highlighted_pins:
+                    self.highlight_pin(nearest_pin)
             else:
-                self.queue_draw()
+                while self.highlighted_pins:
+                    pin = self.highlighted_pins.pop()
+                    self.unhighlight_pin(pin)
 
     def on_button_press(self, widget, event):
         pass
@@ -163,6 +197,10 @@ class PCBWidget(Gtk.DrawingArea):
 
         ctx.set_source_surface(self.surface, 0, 0)
         ctx.paint()
+
+        if self.highlight_surface:
+            ctx.set_source_surface(self.highlight_surface, 0, 0)
+            ctx.paint()
 
         return False
 
