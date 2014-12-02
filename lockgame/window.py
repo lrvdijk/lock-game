@@ -1,4 +1,10 @@
+import os
+
 from gi.repository import Gtk
+
+from lockgame.pcb import PCBWidget
+
+DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
 
 class MainWindow(Gtk.Window):
     def __init__(self):
@@ -19,9 +25,13 @@ class MainWindow(Gtk.Window):
         self.stack_switch.set_stack(self.stack)
         self.hb.props.custom_title = self.stack_switch
 
-        self.stack.add_titled(Gtk.Label("test"), "test1", "Test 1")
+        self.init_pcb_view()
         self.stack.add_titled(Gtk.Label("test dfdg"), "test2", "Test 2")
 
         self.add(self.stack)
+
+    def init_pcb_view(self):
+        self.pcb = PCBWidget(os.path.join(DATA_PATH, "pcb.svg"))
+        self.stack.add_titled(self.pcb, "pcb", "PCB VIew")
 
 
