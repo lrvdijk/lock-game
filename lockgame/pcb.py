@@ -5,6 +5,8 @@ from gi.repository import Gtk, Gdk, Rsvg
 import kdtree
 import cairo
 
+HIGHLIGHT_RADIUS = 5.0
+
 class Pin:
     """
         A class to be used with the KDtree. For the KD tree the object needs
@@ -34,6 +36,7 @@ class PCBWidget(Gtk.DrawingArea):
         Gtk.DrawingArea.__init__(self, *args, **kwargs)
 
         self.surface = None
+        self.highlight_surface = None
         self.svg_handle = Rsvg.Handle.new_from_file(svg_file)
         self.points_to_highlight = []
 
@@ -58,9 +61,51 @@ class PCBWidget(Gtk.DrawingArea):
             pins = [pins]
 
         for pin in pins:
+            # Pin coordinates are given in inkscape coordinates
+            # which puts the (0, 0) point in the bottom left corner
+            # instead of the top left corner.
+            # The line below fixes the y coordinate.
+            pin.y = self.svg_handle.props.height - pin.y
+            print(pin.y)
             self.pins.add(pin)
 
         self.pins.rebalance()
+
+    def to_svg_coordinates(self, x, y):
+        allocation = self.get_allocation()
+        ratio_x = self.svg_handle.props.width / allocation.width
+        ratio_y = self.svg_handle.props.height / allocation.height
+
+        scale = max(ratio_x, ratio_y)
+
+        return scale * x, scale * y
+
+    def to_window_coordinates(self, x, y):
+        allocation = self.get_allocation()
+        ratio_x = allocation.width / self.svg_handle.props.width
+        ratio_y = allocation.height / self.svg_handle.props.height
+
+        scale = min(ratio_x, ratio_y)
+
+        return scale * x, scale * y
+
+    def highlight_pin(self, pin):
+        ctx = cairo.Context(self.surface)
+
+        # Convert x and y to window coordinates
+        scaled_x, scaled_y = self.to_window_coordinates(pin.x, pin.y)
+
+        ctx.arc(scaled_x, scaled_y, HIGHLIGHT_RADIUS, 0, 2*math.pi)
+        ctx.set_source_rgba(1.0, 0, 0, 1.0)
+        ctx.fill()
+
+        rect = Gdk.Rectangle()
+        rect.x = scaled_x - HIGHLIGHT_RADIUS
+        rect.y = scaled_y - HIGHLIGHT_RADIUS
+        rect.width = HIGHLIGHT_RADIUS * 4
+        rect.height = HIGHLIGHT_RADIUS * 4
+
+        self.get_window().invalidate_rect(rect, False)
 
     def on_configure(self, widget, event):
         """
@@ -76,6 +121,7 @@ class PCBWidget(Gtk.DrawingArea):
         self.surface = self.get_window().create_similar_surface(cairo.CONTENT_COLOR,
             allocation.width, allocation.height)
 
+        # Scale our svg to the widget size
         ratio_x = allocation.width / self.svg_handle.props.width
         ratio_y = allocation.height / self.svg_handle.props.height
 
@@ -91,18 +137,7 @@ class PCBWidget(Gtk.DrawingArea):
 
     def on_motion_notify(self, widget, event):
         # Convert mouse x and y to coordinates relative to the original SVG size
-        allocation = widget.get_allocation()
-        ratio_x = self.svg_handle.props.width / allocation.width
-        ratio_y = self.svg_handle.props.height / allocation.height
-
-        scale = max(ratio_x, ratio_y)
-
-        scaled_x = event.x * scale
-        scaled_y = event.y * scale
-
-        # Inkscape places the point (0, 0) in the bottom left corner
-        # instead of the top left corner, so we invert the Y coordinate
-        scaled_y = self.svg_handle.props.height - scaled_y
+        scaled_x, scaled_y = self.to_svg_coordinates(event.x, event.y)
 
         # Find the nearest pins close to the mouse
         result = self.pins.search_nn((scaled_x, scaled_y))
@@ -112,9 +147,12 @@ class PCBWidget(Gtk.DrawingArea):
             dist = math.sqrt((nearest_pin.x - scaled_x)**2 +
                 (nearest_pin.y - scaled_y)**2)
 
-            self.points_to_highlight = []
-            if dist <= 5:
-                self.points_to_highlight = [nearest_pin]
+            print(dist)
+
+            if dist <= 10:
+                self.highlight_pin(nearest_pin)
+            else:
+                self.queue_draw()
 
     def on_button_press(self, widget, event):
         pass
@@ -125,15 +163,6 @@ class PCBWidget(Gtk.DrawingArea):
 
         ctx.set_source_surface(self.surface, 0, 0)
         ctx.paint()
-
-        #for point in self.points_to_highlight:
-        #    ctx.save()
-        #    ctx.translate(point.x, point.y)
-        #    ctx.arc(point.x, point.y, 5, 0, 2*math.pi)
-        #    ctx.set_source_rgb(0xFFFF, 0, 0)
-        #    ctx.fill()
-        #    ctx.restore()
-
 
         return False
 
