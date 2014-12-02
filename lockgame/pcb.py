@@ -6,7 +6,7 @@ import kdtree
 Pin = collections.namedtuple('Pin', 'node x y')
 
 class PCBWidget(Gtk.DrawingArea):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, svg_file, *args, **kwargs):
         Gtk.DrawingArea.__init__(self, *args, **kwargs)
 
         self.svg_handle = Rsvg.Handle.new_from_file(svg_file)
