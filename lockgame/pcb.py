@@ -100,10 +100,10 @@ class PCBWidget(Gtk.DrawingArea):
         ctx.fill()
 
         rect = Gdk.Rectangle()
-        rect.x = scaled_x - HIGHLIGHT_RADIUS
-        rect.y = scaled_y - HIGHLIGHT_RADIUS
-        rect.width = HIGHLIGHT_RADIUS * 2
-        rect.height = HIGHLIGHT_RADIUS * 2
+        rect.x = scaled_x - (HIGHLIGHT_RADIUS + 0.5)
+        rect.y = scaled_y - (HIGHLIGHT_RADIUS + 0.5)
+        rect.width = (HIGHLIGHT_RADIUS + 0.5) * 2
+        rect.height = (HIGHLIGHT_RADIUS + 0.5) * 2
 
         self.get_window().invalidate_rect(rect, False)
         self.highlighted_pins.append(pin)
@@ -120,10 +120,10 @@ class PCBWidget(Gtk.DrawingArea):
         ctx.fill()
 
         rect = Gdk.Rectangle()
-        rect.x = scaled_x - HIGHLIGHT_RADIUS
-        rect.y = scaled_y - HIGHLIGHT_RADIUS
-        rect.width = HIGHLIGHT_RADIUS * 2
-        rect.height = HIGHLIGHT_RADIUS * 2
+        rect.x = scaled_x - (HIGHLIGHT_RADIUS + 0.5)
+        rect.y = scaled_y - (HIGHLIGHT_RADIUS + 0.5)
+        rect.width = (HIGHLIGHT_RADIUS + 0.5) * 2
+        rect.height = (HIGHLIGHT_RADIUS + 0.5) * 2
 
         self.get_window().invalidate_rect(rect, False)
 
@@ -180,13 +180,13 @@ class PCBWidget(Gtk.DrawingArea):
             dist = math.sqrt((nearest_pin.x - scaled_x)**2 +
                 (nearest_pin.y - scaled_y)**2)
 
-            if dist <= 10:
+            while self.highlighted_pins:
+                pin = self.highlighted_pins.pop()
+                self.unhighlight_pin(pin)
+
+            if dist <= 5:
                 if nearest_pin not in self.highlighted_pins:
                     self.highlight_pin(nearest_pin)
-            else:
-                while self.highlighted_pins:
-                    pin = self.highlighted_pins.pop()
-                    self.unhighlight_pin(pin)
 
     def on_button_press(self, widget, event):
         pass
