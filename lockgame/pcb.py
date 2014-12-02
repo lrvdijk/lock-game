@@ -3,7 +3,29 @@ import collections
 from gi.repository import Gtk, Gdk, Rsvg
 import kdtree
 
-Pin = collections.namedtuple('Pin', 'node x y')
+class Pin:
+    """
+        A class to be used with the KDtree. For the KD tree the object needs
+        to be accessible by indices.
+
+        We also operate in 2D, so that's why it returns 2 for __len__.
+    """
+
+    def __init__(self, x=0.0, y=0.0, node=''):
+        self.x = x
+        self.y = y
+        self.node = node
+
+    def __getitem__(self, index):
+        if index == 0:
+            return self.x
+        elif index == 1:
+            return self.y
+        else:
+            raise IndexError("Index out of bounds")
+
+    def __len__(self):
+        return 2
 
 class PCBWidget(Gtk.DrawingArea):
     def __init__(self, svg_file, *args, **kwargs):
