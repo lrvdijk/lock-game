@@ -2,7 +2,7 @@ import os
 
 from gi.repository import Gtk
 
-from lockgame.pcb import PCBWidget
+from lockgame.pcb import PCBWidget, Pin
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
 
@@ -32,6 +32,15 @@ class MainWindow(Gtk.Window):
 
     def init_pcb_view(self):
         self.pcb = PCBWidget(os.path.join(DATA_PATH, "pcb.svg"))
+
+        # Set up pins
+        # Start with GND nodes
+        pins = [
+            Pin(85, 321, 'GND'),
+            Pin(165, 235, 'GND')
+        ]
+
+        self.pcb.add_pins(pins)
         self.stack.add_titled(self.pcb, "pcb", "PCB VIew")
 
 
