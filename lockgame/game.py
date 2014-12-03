@@ -76,5 +76,5 @@ PINS = [
 class Game:
     def __init__(self):
         self.pin_manager = PinManager(os.path.join(DATA_PATH, "pcb.svg"), PINS)
-        self.laptop_shell = ShellManager("dorus", "desktop")
-        self.lock_shell = ShellManager("user", "lock")
+        self.laptop_shell = ShellManager("zsh", "dorus", "desktop")
+        self.lock_shell = ShellManager("sh", "user", "lock")

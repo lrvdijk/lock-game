@@ -4,9 +4,10 @@ class ShellManager:
         Manages the available commands for the shell
     """
 
-    def __init__(self, user="", host=""):
+    def __init__(self, shellname="zsh", user="", host=""):
         self.commands = {}
 
+        self.shellname = shellname
         self.user = user
         self.host = host
 
