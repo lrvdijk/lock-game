@@ -41,6 +41,7 @@ class PCBWidget(Gtk.DrawingArea):
 
         self.scale = 1.0
         self.surface = None
+        self.wire_surface = None
         self.highlight_surface = None
         self.svg_handle = Rsvg.Handle.new_from_file(svg_file)
 
@@ -49,7 +50,7 @@ class PCBWidget(Gtk.DrawingArea):
         self.highlighted_pins = []
 
         self.new_wire_start = None
-        self.wires = []
+        self.connections = []
 
         self.connect('draw', self.on_draw)
         self.connect('configure-event', self.on_configure)
@@ -79,6 +80,12 @@ class PCBWidget(Gtk.DrawingArea):
             self.pins.add(pin)
 
         self.pins.rebalance()
+
+    def add_connection(self, pin1, pin2, draw=False):
+        self.connections.append((pin1, pin2))
+
+        if draw:
+            self.draw_connections()
 
     def to_svg_coordinates(self, x, y):
         allocation = self.get_allocation()
@@ -139,40 +146,43 @@ class PCBWidget(Gtk.DrawingArea):
     def start_draw_wire(self, pin, event):
         self.new_wire_start = pin
 
+    def invalidate_new_wire(self, event):
+        scaled_x, scaled_y = self.to_svg_coordinates(event.x, event.y)
+
+        # Determine minimum point and maximum point
+        min_x = min(scaled_x, self.new_wire_start.x)
+        min_y = min(scaled_y, self.new_wire_start.y)
+
+        max_x = max(scaled_x, self.new_wire_start.x)
+        max_y = max(scaled_y, self.new_wire_start.y)
+
+        scaled_min_x, scaled_min_y = self.to_window_coordinates(min_x, min_y)
+        scaled_max_x, scaled_max_y = self.to_window_coordinates(max_x, max_y)
+
+        update_rect = Gdk.Rectangle()
+        update_rect.x = scaled_min_x - 50
+        update_rect.y = scaled_min_y - 50
+        update_rect.width = (scaled_max_x - scaled_min_x) + 100
+        update_rect.height = (scaled_max_y - scaled_min_y) + 100
+
+        # paint to the surface where we store our state
+        cairo_ctx = cairo.Context(self.highlight_surface)
+
+        # Clear previous contents
+        cairo_ctx.set_source_rgba(1, 1, 1, 1)
+        cairo_ctx.set_operator(cairo.OPERATOR_CLEAR)
+
+        Gdk.cairo_rectangle(cairo_ctx, update_rect)
+        cairo_ctx.fill()
+
+        self.get_window().invalidate_rect(update_rect, False)
+
     def update_new_wire(self, event):
         if not self.new_wire_start:
             return
 
         if event.state & Gdk.ModifierType.BUTTON1_MASK:
-            scaled_x, scaled_y = self.to_svg_coordinates(event.x, event.y)
-
-            # Determine minimum point and maximum point
-            min_x = min(scaled_x, self.new_wire_start.x)
-            min_y = min(scaled_y, self.new_wire_start.y)
-
-            max_x = max(scaled_x, self.new_wire_start.x)
-            max_y = max(scaled_y, self.new_wire_start.y)
-
-            scaled_min_x, scaled_min_y = self.to_window_coordinates(min_x, min_y)
-            scaled_max_x, scaled_max_y = self.to_window_coordinates(max_x, max_y)
-
-            update_rect = Gdk.Rectangle()
-            update_rect.x = scaled_min_x - 50
-            update_rect.y = scaled_min_y - 50
-            update_rect.width = (scaled_max_x - scaled_min_x) + 100
-            update_rect.height = (scaled_max_y - scaled_min_y) + 100
-
-            # paint to the surface where we store our state
-            cairo_ctx = cairo.Context(self.highlight_surface)
-
-            # Clear previous contents
-            cairo_ctx.set_source_rgba(1, 1, 1, 1)
-            cairo_ctx.set_operator(cairo.OPERATOR_CLEAR)
-
-            Gdk.cairo_rectangle(cairo_ctx, update_rect)
-            cairo_ctx.fill()
-
-            self.get_window().invalidate_rect(update_rect, False)
+            self.invalidate_new_wire(event)
             self.draw_new_wire(event)
 
     def draw_new_wire(self, event):
@@ -181,10 +191,10 @@ class PCBWidget(Gtk.DrawingArea):
 
         scaled_x, scaled_y = self.to_svg_coordinates(event.x, event.y)
         self.draw_wire(self.new_wire_start.as_vector(), Vec2d(scaled_x, scaled_y),
-            color=0xFF9900)
+            self.highlight_surface, color=0xFF9900)
 
-    def draw_wire(self, vec1, vec2, color=0x0066FF):
-        ctx = cairo.Context(self.highlight_surface)
+    def draw_wire(self, vec1, vec2, surface, color=0x0066FF):
+        ctx = cairo.Context(surface)
 
         scaled_x1, scaled_y1 = self.to_window_coordinates(vec1.x, vec1.y)
         scaled_x2, scaled_y2 = self.to_window_coordinates(vec2.x, vec2.y)
@@ -195,7 +205,7 @@ class PCBWidget(Gtk.DrawingArea):
         # Move to starting point
         ctx.move_to(scaled_x1, scaled_y1)
 
-        # Vector point from start to end
+        # Vector point from start to end, which is the direction vector
         v = (v2 - v1)
         v_norm = v.normalized()
 
@@ -205,7 +215,7 @@ class PCBWidget(Gtk.DrawingArea):
         contr1_perp = contr1_start.perpendicular().normalized()
         contr1_point = contr1_start + (contr1_perp * (v.length / 4))
 
-        # A little bit further the second point
+        # The same, but then for the other side
         contr2_start = v2 - (v_norm * ((v.length) / 4))
         contr2_perp = -contr2_start.perpendicular().normalized()
         contr2_point = contr2_start + (contr2_perp * (v.length / 4))
@@ -215,7 +225,22 @@ class PCBWidget(Gtk.DrawingArea):
 
         ctx.set_source_rgb((color >> 16)/255, ((color & 0xFF00) >> 8)/255,
             (color & 0xFF)/255)
+        ctx.set_line_width(5)
         ctx.stroke()
+
+    def draw_connections(self):
+        self.create_wire_surface()
+
+        for connection in self.connections:
+            color = 0xFFDD55
+            if connection[0].node == 'VCC' or connection[1].node == 'VCC':
+                color = 0xFF0000
+            elif connection[0].node == 'GND' or connection[1].node == 'GND':
+                color = 0x0066FF
+
+            self.draw_wire(connection[0], connection[1], self.wire_surface, color)
+
+        self.queue_draw()
 
     def on_configure(self, widget, event):
         """
@@ -226,6 +251,9 @@ class PCBWidget(Gtk.DrawingArea):
 
             We also have a separate surface where we paint highlighted pins, and
             when the user holds the mouse button the new wire.
+
+            Finally, there is a third surface, containing all wires between made
+            connections.
 
             .. seealso PCBWidget.on_draw
         """
@@ -248,6 +276,14 @@ class PCBWidget(Gtk.DrawingArea):
         ctx.paint()
         self.svg_handle.render_cairo(ctx)
 
+        self.create_highlight_surface()
+        self.draw_connections()
+
+        return True
+
+    def create_highlight_surface(self):
+        allocation = self.get_allocation()
+
         # Create a separate surface for highlighting areas
         self.highlight_surface = self.get_window().create_similar_surface(
             cairo.CONTENT_COLOR_ALPHA, allocation.width, allocation.height)
@@ -259,7 +295,17 @@ class PCBWidget(Gtk.DrawingArea):
         highlight_ctx.set_operator(cairo.OPERATOR_SOURCE)
         highlight_ctx.paint()
 
-        return True
+    def create_wire_surface(self):
+        allocation = self.get_allocation()
+
+        # And another surface for the wires
+        self.wire_surface = self.get_window().create_similar_surface(
+            cairo.CONTENT_COLOR_ALPHA, allocation.width, allocation.height)
+
+        wire_ctx = cairo.Context(self.wire_surface)
+        wire_ctx.set_source_rgba(1, 1, 1, 0)
+        wire_ctx.set_operator(cairo.OPERATOR_SOURCE)
+        wire_ctx.paint()
 
     def on_motion_notify(self, widget, event):
         # Convert mouse x and y to coordinates relative to the original SVG size
@@ -282,13 +328,33 @@ class PCBWidget(Gtk.DrawingArea):
                     self.highlight_pin(nearest_pin)
 
                 if event.state & Gdk.ModifierType.BUTTON1_MASK:
-                    # Button press
-                    self.start_draw_wire(nearest_pin, event)
+                    # Button pressed
+                    if not self.new_wire_start:
+                        self.start_draw_wire(nearest_pin, event)
 
         self.update_new_wire(event)
 
     def on_button_release(self, widget, event):
         print("Button release")
+
+        if self.new_wire_start:
+            # Check if we need to make a new connection
+
+            svg_x, svg_y = self.to_svg_coordinates(event.x, event.y)
+            result = self.pins.search_nn((svg_x, svg_y))
+
+            if result:
+                nearest_pin = result[0].data
+
+                if nearest_pin is not self.new_wire_start:
+                    dist = math.sqrt((nearest_pin.x - svg_x)**2 +
+                        (nearest_pin.y - svg_y)**2)
+
+                    if dist <= 5:
+                        self.add_connection(self.new_wire_start, nearest_pin, True)
+                        self.invalidate_new_wire(event)
+
+        self.new_wire_start = None
 
     def on_draw(self, widget, ctx):
         if not self.surface:
@@ -296,6 +362,10 @@ class PCBWidget(Gtk.DrawingArea):
 
         ctx.set_source_surface(self.surface, 0, 0)
         ctx.paint()
+
+        if self.wire_surface:
+            ctx.set_source_surface(self.wire_surface, 0, 0)
+            ctx.paint()
 
         if self.highlight_surface:
             ctx.set_source_surface(self.highlight_surface, 0, 0)
