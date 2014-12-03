@@ -5,6 +5,8 @@ from gi.repository import Gtk, Gdk, Rsvg
 import kdtree
 import cairo
 
+from lockgame.vector import Vec2d
+
 HIGHLIGHT_RADIUS = 7.5
 
 class Pin:
@@ -19,6 +21,9 @@ class Pin:
         self.x = x
         self.y = y
         self.node = node
+
+    def as_vector(self):
+        return Vec2d(self.x, self.y)
 
     def __getitem__(self, index):
         if index == 0:
