@@ -8,6 +8,41 @@ from lockgame.vector import Vec2d
 
 HIGHLIGHT_RADIUS = 7.5
 
+class WeightedQuickUnion:
+    """
+        Implements union find algorithm, based on quick find
+    """
+
+    def __init__(self, nodes):
+        self.nodes = nodes
+        self.sizes = {}
+
+        for node in self.nodes:
+            self.sizes[node] = 1
+
+    def find(self, p):
+        while p != self.nodes[p]:
+            p = self.nodes[p]
+
+        return p
+
+    def union(self, p, q):
+        i = self.find(p)
+        j = self.find(q)
+
+        if i == j:
+            return
+
+        if self.sizes[i] < self.sizes[j]:
+            self.nodes[i] = j
+            self.sizes[j] += self.sizes[i]
+        else:
+            self.nodes[j] = i
+            self.sizes[i] += self.sizes[j]
+
+    def connected(self, p, q):
+        return self.find(p) == self.find(q)
+
 class Pin:
     """
         A class to be used with the KDtree. For the KD tree the object needs
@@ -38,25 +73,84 @@ class Pin:
     def __len__(self):
         return 2
 
+class PinManager:
+    def __init__(self, svg_file, pins):
+        self.svg_handle = Rsvg.Handle.new_from_file(svg_file)
+
+        self.pins = kdtree.create(dimensions=2)
+        self.connections = []
+        self.quick_union = None
+
+        self.add_pins(pins)
+
+    def add_pins(self, pins):
+        if type(pins) == Pin:
+            pins = [pins]
+
+        for pin in pins:
+            # Pin coordinates are given in inkscape coordinates
+            # which puts the (0, 0) point in the bottom left corner
+            # instead of the top left corner.
+            # The line below fixes the y coordinate.
+            pin.y = self.svg_handle.props.height - pin.y
+            self.pins.add(pin)
+
+        self.pins.rebalance()
+
+        # Create quick union datastructure
+        self.quick_union = WeightedQuickUnion({
+            pin.data.node: pin.data.node for pin in self.pins.inorder()})
+
+    def add_connection(self, pin1, pin2):
+        self.connections.append((pin1, pin2))
+
+        self.quick_union.union(pin1.node, pin2.node)
+
+    def remove_connections(self, pin):
+        copy = self.connections
+
+        for connection in copy:
+            if connection[0] == pin or connection[1] == pin:
+                self.connections.remove(connection)
+                self.connections.remove((connection[1], connection[0]))
+
+        # Unfortunately we have to recreate the whole union find structure here
+        # again
+        self.quick_union = WeightedQuickUnion({
+            pin.data.node: pin.data.node for pin in self.pins.inorder()})
+
+        for pin1, pin2 in self.connections:
+            self.quick_union.union(pin1.node, pin2.node)
+
+    def pins_connected(self, pin1, pin2):
+        return self.quick_union.connected(pin1.node, pin2.node)
+
+    def nodes_connected(self, node1, node2):
+        return self.quick_union.connected(node1, node2)
+
+    def nearest_pin(self, point):
+        result = self.pins.search_nn(point)
+
+        if result:
+            return result[0].data
+        else:
+            None
+
 class PCBWidget(Gtk.DrawingArea):
-    def __init__(self, svg_file, *args, **kwargs):
+    def __init__(self, pin_manager, *args, **kwargs):
         Gtk.DrawingArea.__init__(self, *args, **kwargs)
 
-        self.scale = 1.0
+        self.pin_manager = pin_manager
 
+        self.scale = 1.0
         self.surface = None
         self.wire_surface = None
         self.new_wire_surface = None
         self.highlight_surface = None
 
-        self.svg_handle = Rsvg.Handle.new_from_file(svg_file)
-
         self.points_to_highlight = []
-        self.pins = kdtree.create(dimensions=2)
         self.highlighted_pins = []
-
         self.new_wire_start = None
-        self.connections = []
 
         self.connect('draw', self.on_draw)
         self.connect('configure-event', self.on_configure)
@@ -73,40 +167,10 @@ class PCBWidget(Gtk.DrawingArea):
             Gdk.EventMask.POINTER_MOTION_MASK
         )
 
-    def add_pins(self, pins):
-        if type(pins) == Pin:
-            pins = [pins]
-
-        for pin in pins:
-            # Pin coordinates are given in inkscape coordinates
-            # which puts the (0, 0) point in the bottom left corner
-            # instead of the top left corner.
-            # The line below fixes the y coordinate.
-            pin.y = self.svg_handle.props.height - pin.y
-            self.pins.add(pin)
-
-        self.pins.rebalance()
-
-    def add_connection(self, pin1, pin2, draw=False):
-        self.connections.append((pin1, pin2))
-
-        if draw:
-            self.draw_connections()
-
-    def remove_connections(self, pin, draw=False):
-        copy = self.connections
-
-        for connection in copy:
-            if connection[0] == pin or connection[1] == pin:
-                self.connections.remove(connection)
-
-        if draw:
-            self.draw_connections()
-
     def to_svg_coordinates(self, x, y):
         allocation = self.get_allocation()
-        ratio_x = self.svg_handle.props.width / allocation.width
-        ratio_y = self.svg_handle.props.height / allocation.height
+        ratio_x = self.pin_manager.svg_handle.props.width / allocation.width
+        ratio_y = self.pin_manager.svg_handle.props.height / allocation.height
 
         scale = max(ratio_x, ratio_y)
 
@@ -114,8 +178,8 @@ class PCBWidget(Gtk.DrawingArea):
 
     def to_window_coordinates(self, x, y):
         allocation = self.get_allocation()
-        ratio_x = allocation.width / self.svg_handle.props.width
-        ratio_y = allocation.height / self.svg_handle.props.height
+        ratio_x = allocation.width / self.pin_manager.svg_handle.props.width
+        ratio_y = allocation.height / self.pin_manager.svg_handle.props.height
 
         scale = min(ratio_x, ratio_y)
 
@@ -247,7 +311,7 @@ class PCBWidget(Gtk.DrawingArea):
     def draw_connections(self):
         self.create_wire_surface()
 
-        for connection in self.connections:
+        for connection in self.pin_manager.connections:
             color = 0xFFDD55
             if connection[0].node == 'VCC' or connection[1].node == 'VCC':
                 color = 0xFF0000
@@ -278,8 +342,8 @@ class PCBWidget(Gtk.DrawingArea):
             allocation.width, allocation.height)
 
         # Scale our svg to the widget size
-        ratio_x = allocation.width / self.svg_handle.props.width
-        ratio_y = allocation.height / self.svg_handle.props.height
+        ratio_x = allocation.width / self.pin_manager.svg_handle.props.width
+        ratio_y = allocation.height / self.pin_manager.svg_handle.props.height
 
         self.scale = min(ratio_x, ratio_y)
 
@@ -287,7 +351,7 @@ class PCBWidget(Gtk.DrawingArea):
         ctx.scale(self.scale, self.scale)
         ctx.set_source_rgb(1/255, 146/255, 62/255)
         ctx.paint()
-        self.svg_handle.render_cairo(ctx)
+        self.pin_manager.svg_handle.render_cairo(ctx)
 
         self.create_highlight_surface()
         self.create_new_wire_surface()
@@ -357,10 +421,8 @@ class PCBWidget(Gtk.DrawingArea):
         scaled_x, scaled_y = self.to_svg_coordinates(event.x, event.y)
 
         # Find the nearest pins close to the mouse
-        result = self.pins.search_nn((scaled_x, scaled_y))
-        if result:
-            nearest_pin = result[0].data
-
+        nearest_pin = self.pin_manager.nearest_pin((scaled_x, scaled_y))
+        if nearest_pin:
             dist = math.sqrt((nearest_pin.x - scaled_x)**2 +
                 (nearest_pin.y - scaled_y)**2)
 
@@ -381,13 +443,10 @@ class PCBWidget(Gtk.DrawingArea):
 
     def on_button_release(self, widget, event):
         svg_x, svg_y = self.to_svg_coordinates(event.x, event.y)
-        result = self.pins.search_nn((svg_x, svg_y))
-        nearest_pin = None
+        nearest_pin = self.pin_manager.nearest_pin((svg_x, svg_y))
         dist = 0
 
-        if result:
-            nearest_pin = result[0].data
-
+        if nearest_pin:
             dist = math.sqrt((nearest_pin.x - svg_x)**2 +
                 (nearest_pin.y - svg_y)**2)
 
@@ -395,13 +454,15 @@ class PCBWidget(Gtk.DrawingArea):
             # Check if we need to make a new connection
             if nearest_pin and nearest_pin is not self.new_wire_start:
                 if dist <= 5:
-                    self.add_connection(self.new_wire_start, nearest_pin, True)
+                    self.pin_manager.add_connection(self.new_wire_start, nearest_pin)
+                    self.draw_connections()
 
             self.invalidate_new_wire(event)
 
         if event.state & Gdk.ModifierType.BUTTON3_MASK:
             if nearest_pin and dist <= 5:
-                self.remove_connections(nearest_pin, True)
+                self.pin_manager.remove_connections(nearest_pin)
+                self.draw_connections()
 
         self.new_wire_start = None
 
