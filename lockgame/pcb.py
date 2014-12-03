@@ -40,9 +40,12 @@ class PCBWidget(Gtk.DrawingArea):
         Gtk.DrawingArea.__init__(self, *args, **kwargs)
 
         self.scale = 1.0
+
         self.surface = None
         self.wire_surface = None
+        self.new_wire_surface = None
         self.highlight_surface = None
+
         self.svg_handle = Rsvg.Handle.new_from_file(svg_file)
 
         self.points_to_highlight = []
@@ -166,7 +169,7 @@ class PCBWidget(Gtk.DrawingArea):
         update_rect.height = (scaled_max_y - scaled_min_y) + 100
 
         # paint to the surface where we store our state
-        cairo_ctx = cairo.Context(self.highlight_surface)
+        cairo_ctx = cairo.Context(self.new_wire_surface)
 
         # Clear previous contents
         cairo_ctx.set_source_rgba(1, 1, 1, 1)
@@ -191,7 +194,7 @@ class PCBWidget(Gtk.DrawingArea):
 
         scaled_x, scaled_y = self.to_svg_coordinates(event.x, event.y)
         self.draw_wire(self.new_wire_start.as_vector(), Vec2d(scaled_x, scaled_y),
-            self.highlight_surface, color=0xFF9900)
+            self.new_wire_surface, color=0xFF9900)
 
     def draw_wire(self, vec1, vec2, surface, color=0x0066FF):
         ctx = cairo.Context(surface)
@@ -249,11 +252,8 @@ class PCBWidget(Gtk.DrawingArea):
             When the draw event happens, we paint this surface to the actual
             widget.
 
-            We also have a separate surface where we paint highlighted pins, and
-            when the user holds the mouse button the new wire.
-
-            Finally, there is a third surface, containing all wires between made
-            connections.
+            We have separate surfaces for highlighting pins, new wires, and
+            existing connections.
 
             .. seealso PCBWidget.on_draw
         """
@@ -277,11 +277,19 @@ class PCBWidget(Gtk.DrawingArea):
         self.svg_handle.render_cairo(ctx)
 
         self.create_highlight_surface()
+        self.create_new_wire_surface()
         self.draw_connections()
 
         return True
 
     def create_highlight_surface(self):
+        """
+            A surface where we draw pin highlights.
+
+            Gets completely redrawn on window resize.
+            Gets partially redrawn when the user moves the mouse.
+        """
+
         allocation = self.get_allocation()
 
         # Create a separate surface for highlighting areas
@@ -296,6 +304,12 @@ class PCBWidget(Gtk.DrawingArea):
         highlight_ctx.paint()
 
     def create_wire_surface(self):
+        """
+            The surface where all connections between pins are drawn.
+
+            This surface is completely redrawn every time a new connection
+            is made.
+        """
         allocation = self.get_allocation()
 
         # And another surface for the wires
@@ -303,6 +317,24 @@ class PCBWidget(Gtk.DrawingArea):
             cairo.CONTENT_COLOR_ALPHA, allocation.width, allocation.height)
 
         wire_ctx = cairo.Context(self.wire_surface)
+        wire_ctx.set_source_rgba(1, 1, 1, 0)
+        wire_ctx.set_operator(cairo.OPERATOR_SOURCE)
+        wire_ctx.paint()
+
+    def create_new_wire_surface(self):
+        """
+            This surface is used for drawing a wire when the user wants to make
+            a new connection.
+
+            It only gets partially redrawn when the user moves the mouse.
+        """
+        allocation = self.get_allocation()
+
+        # And another surface for the wires
+        self.new_wire_surface = self.get_window().create_similar_surface(
+            cairo.CONTENT_COLOR_ALPHA, allocation.width, allocation.height)
+
+        wire_ctx = cairo.Context(self.new_wire_surface)
         wire_ctx.set_source_rgba(1, 1, 1, 0)
         wire_ctx.set_operator(cairo.OPERATOR_SOURCE)
         wire_ctx.paint()
@@ -365,6 +397,10 @@ class PCBWidget(Gtk.DrawingArea):
 
         if self.wire_surface:
             ctx.set_source_surface(self.wire_surface, 0, 0)
+            ctx.paint()
+
+        if self.new_wire_surface:
+            ctx.set_source_surface(self.new_wire_surface, 0, 0)
             ctx.paint()
 
         if self.highlight_surface:
