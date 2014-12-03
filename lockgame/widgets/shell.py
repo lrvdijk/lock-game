@@ -1,4 +1,4 @@
-from gi.repository import Gtk
+from gi.repository import Gtk, GLib
 
 class ShellWidget(Gtk.ScrolledWindow):
     """
@@ -9,6 +9,7 @@ class ShellWidget(Gtk.ScrolledWindow):
         Gtk.VBox.__init__(self, *args, **kwargs)
 
         self.listener_ids = []
+        self.command_ids = []
         self.set_shell_manager(shell_manager)
 
         self.viewport = Gtk.Viewport()
@@ -47,14 +48,34 @@ class ShellWidget(Gtk.ScrolledWindow):
             self.shell_manager.connect('command-output', self.on_command_output))
 
     def run_command(self, entry):
-        command = self.command_entry.get_text()
-        self.add_text("test@localhost> {}".format(command))
+        command_string = self.command_entry.get_text()
+        self.add_text("{}{}\n".format(self.shell_manager.prompt, command_string))
+
         self.command_entry.set_editable(False)
         self.command_entry.set_text("")
-        self.shell_manager.run_command(command)
+
+        command = self.shell_manager.find_command(command_string)
+
+        if not command:
+            self.add_text("sh: unknown command\n")
+        else:
+            # Use idle_add function to prevent threading issues
+            # The command.run function is ran in a separate thread
+            self.command_ids.append(command.connect('command-output',
+                lambda sender, text: GLib.idle_add(
+                    self.on_command_output, sender, text)
+            ))
+
+            self.command_ids.append(command.connect('command-done',
+                lambda sender: GLib.idle_add(self.on_command_done, sender)))
+
+            command.run(command_string)
 
     def on_command_done(self, sender):
         self.command_entry.set_editable(True)
+
+        for listener_id in self.command_ids:
+            sender.disconnect(listener_id)
 
     def add_text(self, text):
         self.textbuffer.insert(self.textbuffer.get_end_iter(), text)
