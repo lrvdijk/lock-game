@@ -85,17 +85,21 @@ class MainWindow(Gtk.Window):
             Pin(324.5, 113.7, 'GND'),
 
             # Atmega16u4 top
-            Pin(217, 221, 'PB7'),
-            Pin(226.5, 221, 'RESET'),
-            Pin(236, 221, 'VCC'),
-            Pin(245.5, 221, 'GND'),
-            Pin(255, 221, 'XTAL1'),
-            Pin(264.5, 221, 'XTAL2'),
-            Pin(274, 221, 'PD0'),
-            Pin(283.5, 221, 'PD1'),
-            Pin(293, 221, 'PD2'),
-            Pin(302.5, 221, 'PD3'),
-            Pin(312, 221, 'PD5'),
+            Pin(217, 221, 'AVCC'),
+            Pin(226.5, 221, 'GND'),
+            Pin(236, 221, 'AREF'),
+            Pin(245.5, 221, 'PF0'),
+            Pin(255, 221, 'PF1'),
+            Pin(264.5, 221, 'PF4'),
+            Pin(274, 221, 'PF5'),
+            Pin(283.5, 221, 'PF6'),
+            Pin(293, 221, 'PD7'),
+            Pin(302.5, 221, 'GND'),
+            Pin(312, 221, 'VCC'),
+
+            # Via near PF5
+            Pin(274.18, 241.14, 'PF5'),
+            Pin(264.5, 267.25, 'PF5')
         ]
 
         self.pcb.add_pins(pins)
