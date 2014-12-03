@@ -32,6 +32,9 @@ class Pin:
         else:
             raise IndexError("Index out of bounds")
 
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y
+
     def __len__(self):
         return 2
 
@@ -86,6 +89,16 @@ class PCBWidget(Gtk.DrawingArea):
 
     def add_connection(self, pin1, pin2, draw=False):
         self.connections.append((pin1, pin2))
+
+        if draw:
+            self.draw_connections()
+
+    def remove_connections(self, pin, draw=False):
+        copy = self.connections
+
+        for connection in copy:
+            if connection[0] == pin or connection[1] == pin:
+                self.connections.remove(connection)
 
         if draw:
             self.draw_connections()
@@ -367,23 +380,29 @@ class PCBWidget(Gtk.DrawingArea):
         self.update_new_wire(event)
 
     def on_button_release(self, widget, event):
+        svg_x, svg_y = self.to_svg_coordinates(event.x, event.y)
+        result = self.pins.search_nn((svg_x, svg_y))
+        nearest_pin = None
+        dist = 0
+
+        if result:
+            nearest_pin = result[0].data
+
+            dist = math.sqrt((nearest_pin.x - svg_x)**2 +
+                (nearest_pin.y - svg_y)**2)
+
         if self.new_wire_start:
             # Check if we need to make a new connection
+            if nearest_pin and nearest_pin is not self.new_wire_start:
+                if dist <= 5:
+                    self.add_connection(self.new_wire_start, nearest_pin, True)
 
-            svg_x, svg_y = self.to_svg_coordinates(event.x, event.y)
-            result = self.pins.search_nn((svg_x, svg_y))
+            self.invalidate_new_wire(event)
 
-            if result:
-                nearest_pin = result[0].data
+        if event.state & Gdk.ModifierType.BUTTON3_MASK:
+            if nearest_pin and dist <= 5:
+                self.remove_connections(nearest_pin, True)
 
-                if nearest_pin is not self.new_wire_start:
-                    dist = math.sqrt((nearest_pin.x - svg_x)**2 +
-                        (nearest_pin.y - svg_y)**2)
-
-                    if dist <= 5:
-                        self.add_connection(self.new_wire_start, nearest_pin, True)
-
-        self.invalidate_new_wire(event)
         self.new_wire_start = None
 
     def on_draw(self, widget, ctx):
