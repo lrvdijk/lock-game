@@ -1,8 +1,9 @@
 import os
 
-from gi.repository import Gtk
+from gi.repository import Gtk, Gdk
 
 from lockgame.pcb import PCBWidget, Pin
+from lockgame.shell_widget import ShellWidget
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
 
@@ -10,6 +11,9 @@ class MainWindow(Gtk.Window):
     def __init__(self):
         Gtk.Window.__init__(self, title="Lock hacking")
 
+        self.init_style()
+
+        self.set_name('LockWindow')
         self.set_border_width(10)
         self.set_default_size(1024, 768)
 
@@ -25,10 +29,28 @@ class MainWindow(Gtk.Window):
         self.stack_switch.set_stack(self.stack)
         self.hb.props.custom_title = self.stack_switch
 
+        self.init_shell_view()
         self.init_pcb_view()
-        self.stack.add_titled(Gtk.Label("test dfdg"), "test2", "Test 2")
 
         self.add(self.stack)
+
+    def init_style(self):
+        style_provider = Gtk.CssProvider()
+
+        with open(os.path.join(DATA_PATH, "shell.css"), 'rb') as f:
+            style_provider.load_from_data(f.read())
+
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(),
+            style_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+    def init_shell_view(self):
+        self.shell_widget = ShellWidget(None)
+        self.shell_widget.get_style_context().add_class('shell-main')
+
+        self.stack.add_titled(self.shell_widget, "shell", "Shell")
 
     def init_pcb_view(self):
         self.pcb = PCBWidget(os.path.join(DATA_PATH, "pcb.svg"))
@@ -103,6 +125,6 @@ class MainWindow(Gtk.Window):
         ]
 
         self.pcb.add_pins(pins)
-        self.stack.add_titled(self.pcb, "pcb", "PCB View")
+        self.stack.add_titled(self.pcb, "pcb", "PCB")
 
 

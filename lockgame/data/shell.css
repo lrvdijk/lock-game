@@ -1,0 +1,16 @@
+.shell-main {
+    background-color: black;
+    color: white;
+    font-family: monospace;
+}
+
+.shell-main GtkTextView, .shell-main .entry {
+    font-family: monospace;
+    color: white;
+    border: none;
+    border-image: none;
+    background: black;
+    background-image: none;
+    box-shadow: none;
+}
+    
