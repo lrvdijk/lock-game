@@ -39,11 +39,12 @@ class PCBWidget(Gtk.DrawingArea):
     def __init__(self, svg_file, *args, **kwargs):
         Gtk.DrawingArea.__init__(self, *args, **kwargs)
 
+        self.scale = 1.0
         self.surface = None
         self.highlight_surface = None
         self.svg_handle = Rsvg.Handle.new_from_file(svg_file)
-        self.points_to_highlight = []
 
+        self.points_to_highlight = []
         self.pins = kdtree.create(dimensions=2)
         self.highlighted_pins = []
 
@@ -139,6 +140,9 @@ class PCBWidget(Gtk.DrawingArea):
             When the draw event happens, we paint this surface to the actual
             widget.
 
+            We also have a separate surface where we paint highlighted pins, and
+            when the user holds the mouse button the new wire.
+
             .. seealso PCBWidget.on_draw
         """
 
@@ -152,10 +156,10 @@ class PCBWidget(Gtk.DrawingArea):
         ratio_x = allocation.width / self.svg_handle.props.width
         ratio_y = allocation.height / self.svg_handle.props.height
 
-        scale = min(ratio_x, ratio_y)
+        self.scale = min(ratio_x, ratio_y)
 
         ctx = cairo.Context(self.surface)
-        ctx.scale(scale, scale)
+        ctx.scale(self.scale, self.scale)
         ctx.set_source_rgb(1/255, 146/255, 62/255)
         ctx.paint()
         self.svg_handle.render_cairo(ctx)
