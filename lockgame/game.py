@@ -3,6 +3,7 @@ import os
 from lockgame.config import DATA_PATH
 from lockgame.widgets.pcb import PinManager, Pin
 from lockgame.shell_manager import ShellManager
+from lockgame import commands
 
 # Set up pins
 PINS = [
@@ -76,5 +77,8 @@ PINS = [
 class Game:
     def __init__(self):
         self.pin_manager = PinManager(os.path.join(DATA_PATH, "pcb.svg"), PINS)
+
         self.laptop_shell = ShellManager("zsh", "dorus", "desktop")
+        self.laptop_shell.add_command(commands.HelpCommand())
+
         self.lock_shell = ShellManager("sh", "user", "lock")

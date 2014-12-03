@@ -1,4 +1,3 @@
-
 class ShellManager:
     """
         Manages the available commands for the shell
