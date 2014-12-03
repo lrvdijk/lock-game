@@ -1,4 +1,3 @@
-import collections
 import math
 
 from gi.repository import Gtk, Gdk, Rsvg
@@ -53,12 +52,13 @@ class PCBWidget(Gtk.DrawingArea):
 
         # Mouse events
         self.connect('motion-notify-event', self.on_motion_notify)
-        self.connect('button-press-event', self.on_button_press)
+        self.connect('button-release-event', self.on_button_release)
 
         self.set_events(
             self.get_events() |
             Gdk.EventMask.LEAVE_NOTIFY_MASK |
             Gdk.EventMask.BUTTON_PRESS_MASK |
+            Gdk.EventMask.BUTTON_RELEASE_MASK |
             Gdk.EventMask.POINTER_MOTION_MASK
         )
 
@@ -193,8 +193,8 @@ class PCBWidget(Gtk.DrawingArea):
                 if nearest_pin not in self.highlighted_pins:
                     self.highlight_pin(nearest_pin)
 
-    def on_button_press(self, widget, event):
-        pass
+    def on_button_release(self, widget, event):
+        print("Button release")
 
     def on_draw(self, widget, ctx):
         if not self.surface:
