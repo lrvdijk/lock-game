@@ -4,6 +4,7 @@ from gi.repository import Gtk, Gdk
 
 from lockgame.pcb import PCBWidget, Pin
 from lockgame.shell_widget import ShellWidget
+from lockgame.shell_manager import ShellManager
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
 
@@ -47,7 +48,8 @@ class MainWindow(Gtk.Window):
         )
 
     def init_shell_view(self):
-        self.shell_widget = ShellWidget(None)
+        test_shell = ShellManager("test", "localhost")
+        self.shell_widget = ShellWidget(test_shell)
         self.shell_widget.get_style_context().add_class('shell-main')
 
         self.stack.add_titled(self.shell_widget, "shell", "Shell")
