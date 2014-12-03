@@ -48,6 +48,9 @@ class PCBWidget(Gtk.DrawingArea):
         self.pins = kdtree.create(dimensions=2)
         self.highlighted_pins = []
 
+        self.new_wire_start = None
+        self.wires = []
+
         self.connect('draw', self.on_draw)
         self.connect('configure-event', self.on_configure)
 
@@ -133,6 +136,87 @@ class PCBWidget(Gtk.DrawingArea):
 
         self.get_window().invalidate_rect(rect, False)
 
+    def start_draw_wire(self, pin, event):
+        self.new_wire_start = pin
+
+    def update_new_wire(self, event):
+        if not self.new_wire_start:
+            return
+
+        if event.state & Gdk.ModifierType.BUTTON1_MASK:
+            scaled_x, scaled_y = self.to_svg_coordinates(event.x, event.y)
+
+            # Determine minimum point and maximum point
+            min_x = min(scaled_x, self.new_wire_start.x)
+            min_y = min(scaled_y, self.new_wire_start.y)
+
+            max_x = max(scaled_x, self.new_wire_start.x)
+            max_y = max(scaled_y, self.new_wire_start.y)
+
+            scaled_min_x, scaled_min_y = self.to_window_coordinates(min_x, min_y)
+            scaled_max_x, scaled_max_y = self.to_window_coordinates(max_x, max_y)
+
+            update_rect = Gdk.Rectangle()
+            update_rect.x = scaled_min_x - 50
+            update_rect.y = scaled_min_y - 50
+            update_rect.width = (scaled_max_x - scaled_min_x) + 100
+            update_rect.height = (scaled_max_y - scaled_min_y) + 100
+
+            # paint to the surface where we store our state
+            cairo_ctx = cairo.Context(self.highlight_surface)
+
+            # Clear previous contents
+            cairo_ctx.set_source_rgba(1, 1, 1, 1)
+            cairo_ctx.set_operator(cairo.OPERATOR_CLEAR)
+
+            Gdk.cairo_rectangle(cairo_ctx, update_rect)
+            cairo_ctx.fill()
+
+            self.get_window().invalidate_rect(update_rect, False)
+            self.draw_new_wire(event)
+
+    def draw_new_wire(self, event):
+        if not self.new_wire_start:
+            return
+
+        scaled_x, scaled_y = self.to_svg_coordinates(event.x, event.y)
+        self.draw_wire(self.new_wire_start.as_vector(), Vec2d(scaled_x, scaled_y),
+            color=0xFF9900)
+
+    def draw_wire(self, vec1, vec2, color=0x0066FF):
+        ctx = cairo.Context(self.highlight_surface)
+
+        scaled_x1, scaled_y1 = self.to_window_coordinates(vec1.x, vec1.y)
+        scaled_x2, scaled_y2 = self.to_window_coordinates(vec2.x, vec2.y)
+
+        v1 = Vec2d(scaled_x1, scaled_y1)
+        v2 = Vec2d(scaled_x2, scaled_y2)
+
+        # Move to starting point
+        ctx.move_to(scaled_x1, scaled_y1)
+
+        # Vector point from start to end
+        v = (v2 - v1)
+        v_norm = v.normalized()
+
+        # Traverse the vector a bit for a good position of the first
+        # control point of the curve
+        contr1_start = v1 + (v_norm * (v.length / 4))
+        contr1_perp = contr1_start.perpendicular().normalized()
+        contr1_point = contr1_start + (contr1_perp * (v.length / 4))
+
+        # A little bit further the second point
+        contr2_start = v2 - (v_norm * ((v.length) / 4))
+        contr2_perp = -contr2_start.perpendicular().normalized()
+        contr2_point = contr2_start + (contr2_perp * (v.length / 4))
+
+        ctx.curve_to(contr1_point.x, contr1_point.y, contr2_point.x, contr2_point.y,
+            v2.x, v2.y)
+
+        ctx.set_source_rgb((color >> 16)/255, ((color & 0xFF00) >> 8)/255,
+            (color & 0xFF)/255)
+        ctx.stroke()
+
     def on_configure(self, widget, event):
         """
             Initialise our surface where the actual drawing happens.
@@ -196,6 +280,12 @@ class PCBWidget(Gtk.DrawingArea):
             if dist <= 5:
                 if nearest_pin not in self.highlighted_pins:
                     self.highlight_pin(nearest_pin)
+
+                if event.state & Gdk.ModifierType.BUTTON1_MASK:
+                    # Button press
+                    self.start_draw_wire(nearest_pin, event)
+
+        self.update_new_wire(event)
 
     def on_button_release(self, widget, event):
         print("Button release")
