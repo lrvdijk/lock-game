@@ -367,8 +367,6 @@ class PCBWidget(Gtk.DrawingArea):
         self.update_new_wire(event)
 
     def on_button_release(self, widget, event):
-        print("Button release")
-
         if self.new_wire_start:
             # Check if we need to make a new connection
 
@@ -384,8 +382,8 @@ class PCBWidget(Gtk.DrawingArea):
 
                     if dist <= 5:
                         self.add_connection(self.new_wire_start, nearest_pin, True)
-                        self.invalidate_new_wire(event)
 
+        self.invalidate_new_wire(event)
         self.new_wire_start = None
 
     def on_draw(self, widget, ctx):
