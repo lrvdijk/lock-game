@@ -11,6 +11,23 @@ def run_threaded(function):
 
     return f
 
+class ShellArgumentParser(argparse.ArgumentParser):
+    def __init__(self, command, *args, **kwargs):
+        self.command = command
+
+        argparse.ArgumentParser.__init__(self, *args, **kwargs)
+
+    def print_usage(self, file=None):
+        argparse.ArgumentParser.print_usage(self, file=self.command)
+        self.command.emit('command-done')
+
+    def print_help(self, file=None):
+        argparse.ArgumentParser.print_help(self, file=self.command)
+        self.command.emit('command-done')
+
+    def _print_message(self, message, file=None):
+        argparse.ArgumentParser._print_message(self, message, file=self.command)
+
 class BaseCommand(GObject.GObject):
     __gsignals__ = {
         'command-output': (GObject.SIGNAL_RUN_FIRST, None, (str,)),
@@ -20,7 +37,10 @@ class BaseCommand(GObject.GObject):
     def run(self, *args, **kwargs):
         raise NotImplementedError
 
-    def output_line(self, text):
+    def write(self, text):
+        self.emit('command-output', text)
+
+    def writeline(self, text):
         self.emit('command-output', "{}\n".format(text))
 
     def help(self):
@@ -39,10 +59,10 @@ class HelpCommand(BaseCommand):
 
     @run_threaded
     def run(self, shell_manager, command_string):
-        self.output_line("Available programs:")
+        self.writeline("Available programs:")
 
         for command in shell_manager.commands.values():
-            self.output_line(command.program_name)
+            self.writeline(command.program_name)
 
         self.emit('command-done')
 
@@ -59,7 +79,7 @@ class LsCommand(BaseCommand):
 
     def __init__(self):
         BaseCommand.__init__(self)
-        self.parser = argparse.ArgumentParser(self.program_name,
+        self.parser = ShellArgumentParser(self, self.program_name,
             description="List available files and directories")
 
         self.parser.add_argument('path', nargs='?', default=".", help="Path to view")
@@ -74,17 +94,17 @@ class LsCommand(BaseCommand):
 
         if args.list:
             for file in files:
-                self.output_line(file)
+                self.writeline(file)
         else:
             buffer = ''
             for file in files:
                 if len(buffer) + len(file) + 1 > 80:
-                    self.output_line(buffer.strip())
+                    self.writeline(buffer.strip())
                     buffer = file
                 else:
                     buffer += '{} '.format(file)
 
-            self.output_line(buffer.strip())
+            self.writeline(buffer.strip())
 
         self.emit('command-done')
 
@@ -102,7 +122,7 @@ class CdCommand(BaseCommand):
     def __init__(self):
         BaseCommand.__init__(self)
 
-        self.parser = argparse.ArgumentParser(self.program_name,
+        self.parser = ShellArgumentParser(self, self.program_name,
             description="Change directory")
         self.parser.add_argument('path', nargs='?', default='.',
             help="The path to change to")
