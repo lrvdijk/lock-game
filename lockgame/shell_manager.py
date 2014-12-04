@@ -50,43 +50,53 @@ class ShellManager:
         else:
             return self.commands[parts[0]]
 
-    def change_directory(self, path):
+    def get_absolute_path(self, path, with_base=False):
         path = PurePath(path)
 
         try:
-            if str(path).startswith("/"):
+            new_path = None
+            if path.is_absolute():
                 new_path = self.base_path / path.relative_to('/')
-                if new_path.is_dir:
-                    new_path = new_path.resolve()
-                    print(new_path)
-                    self.cwd = PurePath('/') / PurePath(new_path).relative_to(
-                        self.base_path)
-                else:
-                    return False
             else:
                 new_path = self.base_path / self.cwd.relative_to('/') / path
-                if new_path.is_dir:
-                    new_path = new_path.resolve()
-                    self.cwd = PurePath('/') / PurePath(new_path).relative_to(
-                        self.base_path)
-                else:
-                    return False
 
-                return True
+            if new_path.exists():
+                new_path = new_path.resolve()
         except ValueError:
-            return False
+            new_path = None
+
+        if new_path:
+            if with_base:
+                return str(new_path)
+            else:
+                return str(PurePath('/') / new_path.relative_to(self.base_path))
+
+        return None
+
+    def change_directory(self, path):
+        absolute_path = Path(self.get_absolute_path(path, True))
+
+        if absolute_path.is_dir():
+            self.cwd = PurePath('/') / absolute_path.relative_to(self.base_path)
+            return True
+
+        return False
 
     def get_files(self, path):
         path = PurePath(path)
-        actual_path = self.base_path / self.cwd.relative_to('/') / path
-        actual_path = actual_path.resolve()
 
         try:
+            actual_path = self.base_path / self.cwd.relative_to('/') / path
+            actual_path = actual_path.resolve()
             actual_path.relative_to(self.base_path)
         except ValueError:
             return []
         else:
-            return map(str, [child.relative_to(self.base_path) for child in
-                actual_path.glob('*')])
+            return map(str, [
+                child.relative_to(self.base_path / actual_path)
+                for child in actual_path.glob('*')
+            ])
+
+
 
 

@@ -12,8 +12,10 @@ def run_threaded(function):
     return f
 
 class ShellArgumentParser(argparse.ArgumentParser):
-    def __init__(self, command, *args, **kwargs):
+    def __init__(self, command=None, *args, **kwargs):
         self.command = command
+        if 'prog' not in kwargs:
+            kwargs['prog'] = self.command.program_name
 
         argparse.ArgumentParser.__init__(self, *args, **kwargs)
 
@@ -79,7 +81,7 @@ class LsCommand(BaseCommand):
 
     def __init__(self):
         BaseCommand.__init__(self)
-        self.parser = ShellArgumentParser(self, self.program_name,
+        self.parser = ShellArgumentParser(self,
             description="List available files and directories")
 
         self.parser.add_argument('path', nargs='?', default=".", help="Path to view")
@@ -122,7 +124,7 @@ class CdCommand(BaseCommand):
     def __init__(self):
         BaseCommand.__init__(self)
 
-        self.parser = ShellArgumentParser(self, self.program_name,
+        self.parser = ShellArgumentParser(self,
             description="Change directory")
         self.parser.add_argument('path', nargs='?', default='.',
             help="The path to change to")
@@ -134,7 +136,4 @@ class CdCommand(BaseCommand):
         shell_manager.change_directory(args.path)
 
         self.emit('command-done')
-
-
-
 
