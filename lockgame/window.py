@@ -29,6 +29,7 @@ class MainWindow(Gtk.Window):
         self.hb.props.custom_title = self.stack_switch
 
         self.game_manager = Game()
+        self.game_manager.connect('change-shell', self.change_shell)
 
         self.init_shell_view()
         self.init_pcb_view()
@@ -57,5 +58,9 @@ class MainWindow(Gtk.Window):
         self.pcb = PCBWidget(self.game_manager.pin_manager)
 
         self.stack.add_titled(self.pcb, "pcb", "PCB")
+
+    def change_shell(self, sender, shell):
+        self.shell_widget.clear_text()
+        self.shell_widget.set_shell_manager(shell)
 
 

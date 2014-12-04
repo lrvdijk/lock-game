@@ -93,6 +93,9 @@ class Game(GObject.GObject):
         self.laptop_shell.add_command(commands.JTAGCommand(self))
 
         self.lock_shell = ShellManager("sh", "user", "lock")
+        self.lock_shell.add_command(commands.HelpCommand())
+        self.lock_shell.add_command(commands.LsCommand())
+        self.lock_shell.add_command(commands.CdCommand())
 
     def change_shell(self, shell):
         GLib.idle_add(lambda: self.emit('change-shell', shell))

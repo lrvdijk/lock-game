@@ -3,14 +3,18 @@ import zipfile
 import shutil
 from pathlib import PurePath, Path
 
+from gi.repository import GObject
+
 from lockgame.config import USER_PATH, DATA_PATH
 
-class ShellManager:
+class ShellManager(GObject.GObject):
     """
         Manages the available commands for the shell
     """
 
     def __init__(self, shellname="zsh", user="", host=""):
+        GObject.GObject.__init__(self)
+
         self.commands = {}
 
         self.shellname = shellname

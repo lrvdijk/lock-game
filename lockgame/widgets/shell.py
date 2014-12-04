@@ -110,4 +110,7 @@ class ShellWidget(Gtk.ScrolledWindow):
 
         return False
 
+    def clear_text(self):
+        self.textbuffer.set_text("")
+
 
