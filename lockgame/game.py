@@ -1,5 +1,7 @@
 import os
 
+from gi.repository import GObject, GLib
+
 from lockgame.config import DATA_PATH
 from lockgame.widgets.pcb import PinManager, Pin
 from lockgame.shell_manager import ShellManager
@@ -74,13 +76,25 @@ PINS = [
     Pin(264.5, 267.25, 'PF5')
 ]
 
-class Game:
+class Game(GObject.GObject):
+    __gsignals__ = {
+        'change-shell': (GObject.SIGNAL_RUN_FIRST, None, (ShellManager,))
+    }
+
     def __init__(self):
+        GObject.GObject.__init__(self)
         self.pin_manager = PinManager(os.path.join(DATA_PATH, "pcb.svg"), PINS)
 
         self.laptop_shell = ShellManager("zsh", "dorus", "desktop")
         self.laptop_shell.add_command(commands.HelpCommand())
         self.laptop_shell.add_command(commands.LsCommand())
         self.laptop_shell.add_command(commands.CdCommand())
+        self.laptop_shell.add_command(commands.BrowserCommand())
+        self.laptop_shell.add_command(commands.JTAGCommand(self))
 
         self.lock_shell = ShellManager("sh", "user", "lock")
+
+    def change_shell(self, shell):
+        GLib.idle_add(lambda: self.emit('change-shell', shell))
+
+
