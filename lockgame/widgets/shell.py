@@ -34,7 +34,6 @@ class ShellWidget(Gtk.ScrolledWindow):
         self.prompt_label = Gtk.Label("Booting...")
         self.command_entry = Gtk.Entry()
         self.command_entry.connect('activate', self.run_command)
-        self.command_entry.grab_focus()
 
         self.entry_hbox.pack_start(self.prompt_label, False, True, 10)
         self.entry_hbox.pack_start(self.command_entry, True, True, 0)
@@ -42,6 +41,8 @@ class ShellWidget(Gtk.ScrolledWindow):
         self.vbox.pack_start(self.entry_hbox, False, True, 0)
 
         self.set_shell_manager(shell_manager)
+        self.grab_focus()
+        self.command_entry.grab_focus()
 
     def set_shell_manager(self, shell_manager):
         self.shell_manager = shell_manager

@@ -64,7 +64,8 @@ class HelpCommand(BaseCommand):
         self.writeline("Available programs:")
 
         for command in shell_manager.commands.values():
-            self.writeline(command.program_name)
+            if not command.hide:
+                self.writeline(command.program_name)
 
         self.emit('command-done')
 
@@ -92,7 +93,12 @@ class LsCommand(BaseCommand):
     def run(self, shell_manager, command_string):
         args = self.parser.parse_args(command_string.split()[1:])
 
-        files = shell_manager.get_files(args.path)
+        abs_path = shell_manager.get_absolute_path(args.path)
+
+        if abs_path == '/bin':
+            files = list(shell_manager.commands.keys())
+        else:
+            files = shell_manager.get_files(args.path)
 
         if args.list:
             for file in files:
@@ -133,7 +139,8 @@ class CdCommand(BaseCommand):
     def run(self, shell_manager, command_string):
         args = self.parser.parse_args(command_string.split()[1:])
 
-        shell_manager.change_directory(args.path)
+        if not shell_manager.change_directory(args.path):
+            self.writeline('cd: not a directory')
 
         self.emit('command-done')
 

@@ -1,4 +1,6 @@
 import os
+import random
+import webbrowser
 
 from gi.repository import GObject, GLib
 
@@ -67,7 +69,7 @@ PINS = [
     Pin(264.5, 221, 'PF4'),
     Pin(274, 221, 'PF5'),
     Pin(283.5, 221, 'PF6'),
-    Pin(293, 221, 'PD7'),
+    Pin(293, 221, 'PF7'),
     Pin(302.5, 221, 'GND'),
     Pin(312, 221, 'VCC'),
 
@@ -84,20 +86,73 @@ class Game(GObject.GObject):
     def __init__(self):
         GObject.GObject.__init__(self)
         self.pin_manager = PinManager(os.path.join(DATA_PATH, "pcb.svg"), PINS)
+        self.pin_manager.connect('connection-change', self.on_change_connection)
 
-        self.laptop_shell = ShellManager("zsh", "dorus", "desktop")
+        self.laptop_shell = ShellManager("zsh", "dorus", "laptop")
+        self.laptop_shell.change_directory("/home/dorus/")
         self.laptop_shell.add_command(commands.HelpCommand())
         self.laptop_shell.add_command(commands.LsCommand())
         self.laptop_shell.add_command(commands.CdCommand())
-        self.laptop_shell.add_command(commands.BrowserCommand())
+        self.laptop_shell.add_command(commands.BrowserCommand(self))
         self.laptop_shell.add_command(commands.JTAGCommand(self))
 
         self.lock_shell = ShellManager("sh", "user", "lock")
         self.lock_shell.add_command(commands.HelpCommand())
         self.lock_shell.add_command(commands.LsCommand())
         self.lock_shell.add_command(commands.CdCommand())
+        self.lock_shell.add_command(commands.GetCodeCommand(self))
+        self.lock_shell.add_command(commands.SetCodeCommand(self))
+        self.lock_shell.add_command(commands.ExitCommand(self))
+
+        self.lock_disabled = False
 
     def change_shell(self, shell):
         GLib.idle_add(lambda: self.emit('change-shell', shell))
+
+    def on_change_connection(self, sender):
+        pb_connected = []
+        pb_connected.append(self.pin_manager.nodes_connected('PB0', 'VCC'))
+        pb_connected.append(self.pin_manager.nodes_connected('PB1', 'VCC'))
+        pb_connected.append(self.pin_manager.nodes_connected('PB2', 'GND'))
+        pb_connected.append(self.pin_manager.nodes_connected('PB3', 'VCC'))
+
+        pb_connected.append(self.pin_manager.nodes_connected('PB4', 'VCC'))
+        pb_connected.append(self.pin_manager.nodes_connected('PB5', 'GND'))
+        pb_connected.append(self.pin_manager.nodes_connected('PB6', 'GND'))
+
+        if all(pb_connected):
+            self.lock_shell.user = "root"
+        else:
+            self.lock_shell.user = "user"
+
+        # Disable lock shell when tampered with JTAG connections
+        conditions = []
+        conditions.append(self.pin_manager.quick_union.sizes['PF7'] == 1)
+        conditions.append(self.pin_manager.quick_union.sizes['PF6'] == 1)
+        conditions.append(self.pin_manager.quick_union.sizes['PF5'] == 1)
+        conditions.append(self.pin_manager.quick_union.sizes['PF4'] == 1)
+        conditions.append(not self.pin_manager.nodes_connected('VCC', 'GND'))
+
+        print(conditions)
+
+        self.lock_disabled = not all(conditions)
+
+        # If VCC and GND are connected show movie
+        if self.pin_manager.nodes_connected('VCC', 'GND'):
+            webbrowser.open("https://www.youtube.com/watch?v=heE4p5nvjro")
+
+    def open_troll_video(self):
+        videos = [
+            'http://youtu.be/Gl49r9zkqAA?t=3s',
+            'http://youtu.be/c5g1IfWo8XA?t=7s',
+            'http://youtu.be/U-R1Jx5-U64?t=4s',
+            'http://youtu.be/YeyzxJlahN4',
+            'http://youtu.be/Vzpx1MZWaAM?t=44s',
+            'http://youtu.be/ROqepn-8dYQ?t=30s',
+        ]
+
+        video = random.choice(videos)
+
+        webbrowser.open(video)
 
 

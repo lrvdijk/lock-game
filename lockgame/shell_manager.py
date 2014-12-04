@@ -100,7 +100,3 @@ class ShellManager(GObject.GObject):
                 child.relative_to(self.base_path / actual_path)
                 for child in actual_path.glob('*')
             ])
-
-
-
-

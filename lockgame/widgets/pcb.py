@@ -1,6 +1,6 @@
 import math
 
-from gi.repository import Gtk, Gdk, Rsvg
+from gi.repository import Gtk, Gdk, Rsvg, GObject
 import kdtree
 import cairo
 
@@ -73,8 +73,14 @@ class Pin:
     def __len__(self):
         return 2
 
-class PinManager:
+class PinManager(GObject.GObject):
+    __gsignals__ = {
+        'connection-change': (GObject.SIGNAL_RUN_FIRST, None, ())
+    }
+
     def __init__(self, svg_file, pins):
+        GObject.GObject.__init__(self)
+
         self.svg_handle = Rsvg.Handle.new_from_file(svg_file)
 
         self.pins = kdtree.create(dimensions=2)
@@ -105,6 +111,7 @@ class PinManager:
         self.connections.append((pin1, pin2))
 
         self.quick_union.union(pin1.node, pin2.node)
+        self.emit('connection-change')
 
     def remove_connections(self, pin):
         copy = self.connections
@@ -112,7 +119,6 @@ class PinManager:
         for connection in copy:
             if connection[0] == pin or connection[1] == pin:
                 self.connections.remove(connection)
-                self.connections.remove((connection[1], connection[0]))
 
         # Unfortunately we have to recreate the whole union find structure here
         # again
@@ -121,6 +127,8 @@ class PinManager:
 
         for pin1, pin2 in self.connections:
             self.quick_union.union(pin1.node, pin2.node)
+
+        self.emit('connection-change')
 
     def pins_connected(self, pin1, pin2):
         return self.quick_union.connected(pin1.node, pin2.node)
@@ -313,10 +321,10 @@ class PCBWidget(Gtk.DrawingArea):
 
         for connection in self.pin_manager.connections:
             color = 0xFFDD55
-            if connection[0].node == 'VCC' or connection[1].node == 'VCC':
-                color = 0xFF0000
-            elif connection[0].node == 'GND' or connection[1].node == 'GND':
+            if connection[0].node == 'GND' or connection[1].node == 'GND':
                 color = 0x0066FF
+            elif connection[0].node == 'VCC' or connection[1].node == 'VCC':
+                color = 0xFF0000
 
             self.draw_wire(connection[0], connection[1], self.wire_surface, color)
 
