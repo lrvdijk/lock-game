@@ -21,7 +21,7 @@ class BaseCommand(GObject.GObject):
         raise NotImplementedError
 
     def output_line(self, text):
-        self.emit("{}\n".format(text))
+        self.emit('command-output', "{}\n".format(text))
 
     def help(self):
         return ""
@@ -58,6 +58,7 @@ class LsCommand(BaseCommand):
     hide = False
 
     def __init__(self):
+        BaseCommand.__init__(self)
         self.parser = argparse.ArgumentParser(self.program_name,
             description="List available files and directories")
 
@@ -78,13 +79,41 @@ class LsCommand(BaseCommand):
             buffer = ''
             for file in files:
                 if len(buffer) + len(file) + 1 > 80:
-                    self.output_line(buffer)
+                    self.output_line(buffer.strip())
                     buffer = file
                 else:
-                    buffer += ' {}'.format(file)
+                    buffer += '{} '.format(file)
 
-            self.output_line(buffer)
+            self.output_line(buffer.strip())
 
+        self.emit('command-done')
+
+class CdCommand(BaseCommand):
+    """
+        cd
+        ==
+
+        Change directory
+    """
+
+    program_name = "cd"
+    hide = False
+
+    def __init__(self):
+        BaseCommand.__init__(self)
+
+        self.parser = argparse.ArgumentParser(self.program_name,
+            description="Change directory")
+        self.parser.add_argument('path', nargs='?', default='.',
+            help="The path to change to")
+
+    @run_threaded
+    def run(self, shell_manager, command_string):
+        args = self.parser.parse_args(command_string.split()[1:])
+
+        shell_manager.change_directory(args.path)
+
+        self.emit('command-done')
 
 
 

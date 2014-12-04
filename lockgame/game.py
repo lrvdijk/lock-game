@@ -80,5 +80,7 @@ class Game:
 
         self.laptop_shell = ShellManager("zsh", "dorus", "desktop")
         self.laptop_shell.add_command(commands.HelpCommand())
+        self.laptop_shell.add_command(commands.LsCommand())
+        self.laptop_shell.add_command(commands.CdCommand())
 
         self.lock_shell = ShellManager("sh", "user", "lock")
